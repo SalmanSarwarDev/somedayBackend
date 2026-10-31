@@ -117,4 +117,3 @@ Send the request as `multipart/form-data`, with the image in the `avatar` field 
 ```
 
 All profile and password endpoints require the bearer token. Passwords are hashed before storage. The model uses the MongoDB collection named `User`.
-fdfd
