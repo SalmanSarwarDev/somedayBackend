@@ -1,12 +1,12 @@
-const bcrypt = require('bcrypt');
-const User = require('../models/User');
 const {
-  publicUser,
   signup,
   login,
   googleLogin,
   verifyEmail,
   resendVerification,
+  forgotPassword,
+  resetPassword,
+  changePassword,
 } = require('../services/auth.service');
 
 const sendError = (res, error) => {
@@ -70,22 +70,28 @@ const resendVerificationCode = async (req, res) => {
   }
 };
 
-const changePassword = async (req, res) => {
+const forgotPasswordUser = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body || {};
-    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || newPassword.length < 8) {
-      return res.status(400).json({ succeeded: false, message: 'Provide currentPassword and a new password of at least 8 characters' });
-    }
+    const data = await forgotPassword(req.body);
+    return res.json({ succeeded: true, ...data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
 
-    const user = await User.findById(req.userId).select('+password');
-    if (!user) return res.status(404).json({ succeeded: false, message: 'User not found' });
-    if (!(await bcrypt.compare(currentPassword, user.password))) {
-      return res.status(401).json({ succeeded: false, message: 'Current password is incorrect' });
-    }
+const resetPasswordUser = async (req, res) => {
+  try {
+    const data = await resetPassword(req.body);
+    return res.json({ succeeded: true, ...data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
 
-    user.password = newPassword;
-    await user.save();
-    return res.json({ succeeded: true, message: 'Password changed successfully' });
+const changePasswordUser = async (req, res) => {
+  try {
+    const data = await changePassword(req.userId, req.body);
+    return res.json({ succeeded: true, ...data });
   } catch (error) {
     return sendError(res, error);
   }
@@ -97,5 +103,7 @@ module.exports = {
   googleLoginUser,
   verifyEmailAddress,
   resendVerificationCode,
-  changePassword,
+  forgotPasswordUser,
+  resetPasswordUser,
+  changePassword: changePasswordUser,
 };

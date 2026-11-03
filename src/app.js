@@ -1,6 +1,8 @@
 const express = require('express');
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
+const notificationRoutes = require('./routes/notification.routes');
+const routineRoutes = require('./routes/routine.routes');
 
 const app = express();
 
@@ -21,6 +23,8 @@ app.use(express.static('public'));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/routines', routineRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error.message);

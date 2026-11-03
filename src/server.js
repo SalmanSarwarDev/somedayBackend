@@ -1,8 +1,7 @@
 require('dotenv').config();
 
 const app = require('./app');
-
-
+const routCron = require('./crons/routineCron');
 const { connectDatabase, mongoose } = require('./config/database');
 
 const start = async () => {
@@ -11,6 +10,8 @@ const start = async () => {
   }
 
   await connectDatabase();
+  routCron();
+
   const port = Number(process.env.PORT) || 5001;
   const server = app.listen(port, () => {
     console.log(`Someday API listening at http://localhost:${port}`);

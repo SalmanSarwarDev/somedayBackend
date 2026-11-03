@@ -31,6 +31,26 @@ const userSchema = new mongoose.Schema(
     emailVerificationExpiresAt: { type: Date, select: false },
     emailVerificationLastSentAt: { type: Date, select: false },
     emailVerificationAttempts: { type: Number, default: 0, select: false },
+    passwordResetCodeHash: { type: String, select: false },
+    passwordResetExpiresAt: { type: Date, select: false },
+    passwordResetLastSentAt: { type: Date, select: false },
+    passwordResetAttempts: { type: Number, default: 0, select: false },
+    fcmTokens: {
+      type: [
+        {
+          token: { type: String, required: true, trim: true },
+          device: { type: String, trim: true, default: 'web' },
+          updatedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+      select: false,
+    },
+    timezone: {
+      type: String,
+      trim: true,
+      default: 'Asia/Karachi',
+    },
     phone: { type: String, trim: true, default: '' },
     avatar: { type: String, default: '' },
     avatarPublicId: { type: String, default: '', select: false },
@@ -45,6 +65,7 @@ const userSchema = new mongoose.Schema(
         value.id = String(value._id);
         delete value._id;
         delete value.password;
+        delete value.fcmTokens;
         return value;
       },
     },

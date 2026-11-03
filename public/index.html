@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Someday API - Test Suite (Auth & Notifications)</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 30px 16px;
+      box-sizing: border-box;
+    }
+    .container {
+      max-width: 680px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+    h2 { margin-top: 0; color: #1a202c; font-size: 20px; }
+    p.subtitle { color: #64748b; font-size: 13px; margin-top: -6px; margin-bottom: 18px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 4px; }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      box-sizing: border-box;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    small.hint {
+      display: block;
+      color: #64748b;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    button {
+      padding: 10px 16px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #4338ca; }
+    button.btn-outline {
+      background: #ffffff;
+      color: #374151;
+      border: 1px solid #d1d5db;
+    }
+    button.btn-outline:hover { background: #f9fafb; }
+    button.btn-success {
+      background: #059669;
+    }
+    button.btn-success:hover { background: #047857; }
+    button.btn-warning {
+      background: #ea580c;
+    }
+    button.btn-warning:hover { background: #c2410c; }
+    pre {
+      background: #0f172a;
+      color: #38bdf8;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      overflow-x: auto;
+      max-height: 240px;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    .badge-success { background: #dcfce7; color: #166534; }
+    .badge-error { background: #fee2e2; color: #991b1b; }
+    .badge-info { background: #e0e7ff; color: #3730a3; }
+    .live-alert {
+      padding: 14px;
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      border-radius: 6px;
+      margin-top: 12px;
+      display: none;
+    }
+    .server-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #475569;
+      margin-bottom: 12px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+  </style>
+
+  <!-- Firebase Web SDKs (App, Auth, and Messaging) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <div style="text-align: center; margin-bottom: 10px;">
+      <h1 style="margin: 0; color: #1e293b; font-size: 26px;">Someday API Control Center</h1>
+      <p style="margin: 6px 0 0; color: #64748b;">Firebase Authentication & Web Push Notifications</p>
+    </div>
+
+    <!-- Live In-App Notification Banner -->
+    <div id="liveNotificationBanner" class="live-alert">
+      <strong>🔔 Live Notification Received (Foreground):</strong>
+      <div id="liveNotificationText" style="margin-top: 4px; font-size: 14px;"></div>
+    </div>
+
+    <!-- Firebase Web Credentials Setup -->
+    <div class="card">
+      <div class="server-indicator">
+        <span class="dot"></span>
+        <span>Target API Server: <strong id="apiTargetDisplay">http://localhost:5001</strong></span>
+      </div>
+
+      <h2>1. Firebase Web Configuration</h2>
+      <p class="subtitle">Enter your Firebase Web keys to enable Google Login & generate browser FCM tokens.</p>
+      
+      <div class="form-group">
+        <label>Firebase Web API Key:</label>
+        <input type="text" id="webApiKey" placeholder="AIzaSy..." />
+        <small class="hint">Firebase Console &gt; Project Settings &gt; General &gt; Web API Key</small>
+      </div>
+
+      <div class="form-group">
+        <label>Firebase App ID (appId):</label>
+        <input type="text" id="appId" value="1:1017626458064:web:fc9057a81706a6b9a9at" placeholder="1:1017626458064:web:..." />
+        <small class="hint">Firebase Console &gt; Project Settings &gt; General &gt; Your apps (Web app) &gt; App ID</small>
+      </div>
+
+      <div class="form-group">
+        <label>Firebase VAPID Key (Web Push Certificate Key Pair):</label>
+        <input type="text" id="vapidKey" placeholder="e.g. BD5vY0eP0Qf..." />
+        <small class="hint">Firebase Console &gt; Project Settings &gt; Cloud Messaging &gt; Web configuration &gt; Generate key pair</small>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-outline" onclick="handleGoogleSignIn()">Sign in with Google</button>
+      </div>
+
+      <div class="form-group" style="margin-top: 14px;">
+        <label>Current Bearer Token (JWT):</label>
+        <input type="text" id="jwtToken" placeholder="Paste JWT token or sign in with Google above..." />
+      </div>
+      <div id="authStatus"></div>
+    </div>
+
+    <!-- Notification Test Card -->
+    <div class="card">
+      <h2>2. Browser FCM Token & Push Notifications</h2>
+      <p class="subtitle">Extract your real browser push token with 1 click, register it, and send a test push.</p>
+
+      <div style="margin-bottom: 16px;">
+        <button class="btn-warning" onclick="requestBrowserFcmToken()">
+          🔔 1. Generate Browser FCM Token
+        </button>
+        <small class="hint" style="margin-top: 6px;">
+          Yeh button browser se notification permission maangta hai aur Firebase se real device token generate karta hai.
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label>Extracted Browser FCM Token:</label>
+        <input type="text" id="fcmTokenInput" placeholder="Click 'Generate Browser FCM Token' above..." />
+      </div>
+
+      <div class="form-group">
+        <label>Notification Title:</label>
+        <input type="text" id="notifTitle" value="Someday Push Test 🔔" />
+      </div>
+
+      <div class="form-group">
+        <label>Notification Body:</label>
+        <input type="text" id="notifBody" value="Hello from Someday Backend! Push notifications are working 100%." />
+      </div>
+
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button onclick="registerTokenApi()">
+          💾 2. Register Token to User Account
+        </button>
+        <button class="btn-success" onclick="sendTestNotificationApi()">
+          🚀 3. Send Test Notification
+        </button>
+      </div>
+
+      <div id="tokenStatus"></div>
+
+      <h4 style="margin: 18px 0 6px; font-size: 13px; color: #475569;">Server Response:</h4>
+      <pre id="outputLog">// Responses will appear here...</pre>
+    </div>
+  </div>
+
+  <script>
+    const projectId = "someday-e47c0";
+    let messagingInstance = null;
+
+    // Automatically route to Express backend on port 5001 even if opened in VS Code Live Server (port 5500)
+    const API_BASE = (window.location.port === '5001') ? '' : 'http://localhost:5001';
+    document.getElementById('apiTargetDisplay').textContent = API_BASE ? API_BASE : window.location.origin;
+
+    function getAuthHeader() {
+      const token = document.getElementById('jwtToken').value.trim();
+      return token ? { 'Authorization': `Bearer ${token}` } : {};
+    }
+
+    function logResponse(data) {
+      document.getElementById('outputLog').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function initFirebaseApp() {
+      const apiKey = document.getElementById('webApiKey').value.trim();
+      const appId = document.getElementById('appId').value.trim();
+
+      if (!apiKey) {
+        alert('Please enter your Firebase Web API Key in Box #1 first.');
+        return null;
+      }
+      if (!appId) {
+        alert('Please enter your Firebase App ID (appId) in Box #1 first.');
+        return null;
+      }
+
+      if (!firebase.apps.length) {
+        firebase.initializeApp({
+          apiKey,
+          authDomain: `${projectId}.firebaseapp.com`,
+          projectId,
+          messagingSenderId: '102883212320',
+          appId,
+        });
+      }
+      return firebase.app();
+    }
+
+    // --- STEP 1: Google Sign-in ---
+    async function handleGoogleSignIn() {
+      try {
+        initFirebaseApp();
+        const provider = new firebase.auth.GoogleAuthProvider();
+        const result = await firebase.auth().signInWithPopup(provider);
+        const idToken = await result.user.getIdToken();
+
+        const res = await fetch(`${API_BASE}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+        const json = await res.json();
+        logResponse(json);
+
+        if (json.succeeded && json.data.token) {
+          document.getElementById('jwtToken').value = json.data.token;
+          document.getElementById('authStatus').innerHTML =
+            `<span class="status-badge badge-success">✓ Logged in as: ${json.data.user.email}</span>`;
+        }
+      } catch (err) {
+        logResponse({ error: err.message });
+      }
+    }
+
+    // --- STEP 2: Extract Browser FCM Token ---
+    async function requestBrowserFcmToken() {
+      const apiKey = document.getElementById('webApiKey').value.trim();
+      const appId = document.getElementById('appId').value.trim();
+      const vapidKey = document.getElementById('vapidKey').value.trim();
+
+      try {
+        if (!initFirebaseApp()) return;
+
+        // 1. Request Browser Permission
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          alert('Notification permission was denied or dismissed! Please enable it in browser site settings.');
+          return;
+        }
+
+        // 2. Unregister any previously stuck/broken service worker
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const reg of registrations) {
+            await reg.unregister();
+          }
+        } catch (unregErr) {
+          console.warn('Could not unregister previous workers:', unregErr);
+        }
+
+        // 3. Register fresh Service Worker with appId
+        const swPath = (window.location.port === '5001')
+          ? '/firebase-messaging-sw.js'
+          : (window.location.pathname.includes('/public') ? './firebase-messaging-sw.js' : '/public/firebase-messaging-sw.js');
+
+        const swUrl = `${swPath}?apiKey=${encodeURIComponent(apiKey)}&appId=${encodeURIComponent(appId)}&v=${Date.now()}`;
+        const swReg = await navigator.serviceWorker.register(swUrl);
+        console.log('Service Worker registered successfully:', swReg);
+
+        // 4. Get FCM Token from Firebase
+        messagingInstance = firebase.messaging();
+
+        // Listen for foreground notifications (while tab is active)
+        messagingInstance.onMessage((payload) => {
+          console.log('Foreground notification received:', payload);
+          const banner = document.getElementById('liveNotificationBanner');
+          const text = document.getElementById('liveNotificationText');
+          const title = payload.notification?.title || payload.data?.title || 'Someday Notification 🔔';
+          const body = payload.notification?.body || payload.data?.body || '';
+          text.textContent = `${title} — ${body}`;
+          banner.style.display = 'block';
+
+          // Also show native Windows popup even when tab is open/active
+          if (Notification.permission === 'granted') {
+            const tag = payload.data?.routineId ? ('routine-' + payload.data.routineId) : 'someday-notif';
+            try {
+              new Notification(title, {
+                body,
+                icon: payload.notification?.icon || '/favicon.ico',
+                tag: tag,
+                renotify: false,
+              });
+            } catch (err) {
+              console.warn('Native notification display error:', err);
+            }
+          }
+        });
+
+        const tokenOptions = { serviceWorkerRegistration: swReg };
+        if (vapidKey) {
+          tokenOptions.vapidKey = vapidKey;
+        }
+
+        const currentToken = await messagingInstance.getToken(tokenOptions);
+
+        if (currentToken) {
+          document.getElementById('fcmTokenInput').value = currentToken;
+          document.getElementById('tokenStatus').innerHTML =
+            '<span class="status-badge badge-success">✓ Browser FCM Token Generated! Ready to Register & Test.</span>';
+          logResponse({
+            status: 'Token extracted successfully',
+            token: currentToken
+          });
+        } else {
+          document.getElementById('tokenStatus').innerHTML =
+            '<span class="status-badge badge-error">No token received. Check your VAPID Key.</span>';
+        }
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('tokenStatus').innerHTML =
+          `<span class="status-badge badge-error">Error: ${err.message}</span>`;
+        logResponse({ error: err.message });
+      }
+    }
+
+    // --- STEP 3: Register Token to User Account on Backend ---
+    async function registerTokenApi() {
+      const token = document.getElementById('fcmTokenInput').value.trim();
+      if (!token) {
+        alert('Please extract or paste an FCM token first.');
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/api/notifications/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader()
+          },
+          body: JSON.stringify({ token, device: 'web' })
+        });
+        const json = await res.json();
+        logResponse(json);
+      } catch (err) {
+        logResponse({ error: err.message });
+      }
+    }
+
+    // --- STEP 4: Send Test Push Notification ---
+    async function sendTestNotificationApi() {
+      const token = document.getElementById('fcmTokenInput').value.trim();
+      const title = document.getElementById('notifTitle').value.trim();
+      const body = document.getElementById('notifBody').value.trim();
+
+      const payload = { title, body };
+      if (token) payload.token = token;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/notifications/test`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader()
+          },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        logResponse(json);
+      } catch (err) {
+        logResponse({ error: err.message });
+      }
+    }
+  </script>
+</body>
+</html>

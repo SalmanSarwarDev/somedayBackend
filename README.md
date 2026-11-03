@@ -1,6 +1,6 @@
 # Someday API
 
-Standalone Express API with a MongoDB `User` collection and JWT authentication.
+Standalone Express API with a MongoDB `User` collection, Daily Routine Notification Module, and JWT authentication.
 
 ## Setup
 
@@ -26,11 +26,12 @@ The API listens on `http://localhost:5001` by default.
   "firstName": "Sam",
   "lastName": "Khan",
   "email": "sam@example.com",
-  "password": "MyPassword123"
+  "password": "MyPassword123",
+  "timezone": "Asia/Karachi"
 }
 ```
 
-Signup creates an unverified account and emails a six-digit verification code. Configure Brevo SMTP using the `BREVO_SMTP_*` and `BREVO_SENDER_*` variables in `.env`. The code expires after 10 minutes.
+Signup creates an unverified account, saves the validated IANA timezone (default `Asia/Karachi`), automatically initializes the 6 predefined daily routines with randomized logical times, and emails a six-digit verification code.
 
 ### Verify email
 
@@ -42,20 +43,6 @@ Signup creates an unverified account and emails a six-digit verification code. C
   "otp": "123456"
 }
 ```
-
-After verification succeeds, log in normally to receive a token. Login is not available before verification.
-
-### Resend verification code
-
-`POST /api/auth/resend-verification`
-
-```json
-{
-  "email": "sam@example.com"
-}
-```
-
-Resending is limited to once per minute for each account.
 
 ### Log in
 
@@ -76,13 +63,43 @@ Copy `data.token` from the response and send it as `Authorization: Bearer <token
 
 ```json
 {
-  "idToken": "<FIREBASE_ID_TOKEN>"
+  "idToken": "<FIREBASE_ID_TOKEN>",
+  "timezone": "Asia/Karachi"
 }
 ```
 
-Authenticates using a Firebase Google ID token from the web or mobile client. If no account exists, an active, verified account is automatically created. If an account with the same email already exists, Google auth is linked. Returns the Someday JWT Bearer token in `data.token`.
+### Forgot password
 
-A web test interface is available at `http://localhost:5001/` when running the server.
+`POST /api/auth/forgot-password`
+
+```json
+{
+  "email": "sam@example.com"
+}
+```
+
+### Reset password
+
+`POST /api/auth/reset-password`
+
+```json
+{
+  "email": "sam@example.com",
+  "otp": "123456",
+  "newPassword": "MyNewPassword123"
+}
+```
+
+### Change / Set password
+
+`PATCH /api/auth/change-password`
+
+```json
+{
+  "currentPassword": "MyPassword123",
+  "newPassword": "AnotherPassword456"
+}
+```
 
 ### Get profile
 
@@ -95,25 +112,117 @@ A web test interface is available at `http://localhost:5001/` when running the s
 ```json
 {
   "firstName": "Samir",
-  "phone": "+1-555-0100"
+  "phone": "+1-555-0100",
+  "timezone": "Europe/Budapest"
 }
 ```
 
-### Upload profile image
+### Daily Routines
 
-`PATCH /api/users/profile/avatar`
+All routine endpoints require `Authorization: Bearer <token>`.
 
-Send the request as `multipart/form-data`, with the image in the `avatar` field and the bearer token in the `Authorization` header. JPEG, PNG, and WebP images up to 5 MB are accepted. The server associates the upload with the authenticated user, stores it in that user's Cloudinary folder, and saves the secure image URL and Cloudinary public ID on that user's MongoDB document. The response includes the image URL in `data.user.avatar`. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `.env`.
+#### 1. Get user routines
 
-### Change password
+`GET /api/routines`
 
-`PATCH /api/auth/change-password`
+Response:
+```json
+{
+  "succeeded": true,
+  "data": {
+    "routines": [
+      {
+        "id": "6727...",
+        "routineKey": "morning",
+        "title": "Morning Routine",
+        "description": "Start your day with mindfulness, hydration, and light stretching.",
+        "time": "06:20",
+        "order": 1,
+        "isCompleted": false,
+        "notificationEnabled": true,
+        "isActive": true
+      },
+      {
+        "id": "6728...",
+        "routineKey": "coffee",
+        "title": "Coffee Time",
+        "description": "Enjoy your morning brew and plan your day ahead.",
+        "time": "08:15",
+        "order": 2,
+        "isCompleted": true,
+        "notificationEnabled": true,
+        "isActive": true
+      }
+    ]
+  }
+}
+```
+
+#### 2. Update routine time
+
+`PATCH /api/routines/:id/time`
 
 ```json
 {
-  "currentPassword": "MyPassword123",
-  "newPassword": "AnotherPassword456"
+  "time": "08:30"
 }
 ```
 
-All profile and password endpoints require the bearer token. Passwords are hashed before storage. The model uses the MongoDB collection named `User`.
+Updates the routine notification time. Must be in 24-hour `HH:mm` format.
+
+#### 3. Toggle routine notification
+
+`PATCH /api/routines/:id/notification`
+
+```json
+{
+  "notificationEnabled": false
+}
+```
+
+#### 4. Update routine completion (boolean toggle)
+
+`PATCH /api/routines/:id/complete`
+
+```json
+{
+  "isCompleted": true
+}
+```
+
+Updates the routine's `isCompleted` boolean directly on the Routine document.
+
+### Notifications (Firebase Cloud Messaging)
+
+#### 1. Register Device Token
+
+`POST /api/notifications/token`
+
+```json
+{
+  "token": "fcm-device-registration-token...",
+  "device": "web"
+}
+```
+
+#### 2. Unregister Device Token (Logout)
+
+`DELETE /api/notifications/token`
+
+```json
+{
+  "token": "fcm-device-registration-token..."
+}
+```
+
+#### 3. Send Notification to User
+
+`POST /api/notifications/send`
+
+```json
+{
+  "targetUserId": "6724...",
+  "title": "Message",
+  "body": "Hello!"
+}
+```

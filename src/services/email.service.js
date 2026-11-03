@@ -24,10 +24,10 @@ const assertEmailConfiguration = () => {
   }
 };
 
-const sendVerificationEmail = async (user, otp) => {
+const createTransporter = () => {
   assertEmailConfiguration();
   const port = Number(process.env.BREVO_SMTP_PORT || 587);
-  const transporter = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
     port,
     secure: port === 465,
@@ -37,6 +37,10 @@ const sendVerificationEmail = async (user, otp) => {
       pass: process.env.BREVO_SMTP_KEY,
     },
   });
+};
+
+const sendVerificationEmail = async (user, otp) => {
+  const transporter = createTransporter();
   try {
     const firstName = escapeHtml(user.firstName);
     await transporter.sendMail({
@@ -126,4 +130,100 @@ const sendVerificationEmail = async (user, otp) => {
   }
 };
 
-module.exports = { assertEmailConfiguration, sendVerificationEmail };
+const sendPasswordResetEmail = async (user, otp) => {
+  const transporter = createTransporter();
+  try {
+    const firstName = escapeHtml(user.firstName);
+    await transporter.sendMail({
+      from: {
+        name: process.env.BREVO_SENDER_NAME || 'Someday',
+        address: process.env.BREVO_SENDER_EMAIL,
+      },
+      to: user.email,
+      subject: 'Reset your Someday password',
+      text: [
+        `Hello ${user.firstName},`,
+        '',
+        `We received a request to reset or set your Someday password.`,
+        `Your password reset code is: ${otp}`,
+        '',
+        'This code expires in 10 minutes.',
+        '',
+        'If you did not request a password reset, you can safely ignore this email.',
+      ].join('\n'),
+      html: `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Reset your Someday password</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f5f9;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+      Your Someday password reset code expires in 10 minutes.
+    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f3f5f9;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;">
+            <tr>
+              <td align="center" style="padding:0 0 24px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" valign="middle" width="42" height="42" style="width:42px;height:42px;border-radius:12px;background-color:#5b5ce2;color:#ffffff;font-size:22px;font-weight:bold;">S</td>
+                    <td style="padding-left:10px;color:#172033;font-size:22px;font-weight:bold;letter-spacing:-0.5px;">Someday</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0;background-color:#ffffff;border:1px solid #e6e9f0;border-radius:16px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td style="padding:40px 40px 36px;">
+                      <p style="margin:0 0 12px;color:#e11d48;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">Password Reset</p>
+                      <h1 style="margin:0 0 16px;color:#172033;font-size:28px;line-height:1.25;font-weight:700;">Password request, ${firstName}</h1>
+                      <p style="margin:0 0 28px;color:#596579;font-size:16px;line-height:1.65;">Use the one-time code below to reset your password or set a new password for your account.</p>
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                        <tr>
+                          <td align="center" style="padding:20px 12px;background-color:#fff1f2;border:1px solid #ffe4e6;border-radius:12px;">
+                            <span style="color:#e11d48;font-family:'Courier New',monospace;font-size:36px;font-weight:bold;letter-spacing:10px;">${otp}</span>
+                          </td>
+                        </tr>
+                      </table>
+                      <p style="margin:18px 0 0;color:#7a8495;font-size:14px;line-height:1.6;text-align:center;">This code expires in <strong style="color:#596579;">10 minutes</strong>.</p>
+                      <hr style="height:1px;margin:30px 0 22px;border:0;background-color:#edf0f5;">
+                      <p style="margin:0;color:#7a8495;font-size:13px;line-height:1.7;">If you did not request a password reset, you can safely ignore this email. Your account remains completely secure.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:22px 16px 0;color:#929bad;font-size:12px;line-height:1.6;">
+                This is an automated message from Someday. Please don’t reply to this email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+    });
+  } catch (cause) {
+    console.error('Brevo password reset email delivery failed:', cause.message);
+    const error = new Error('Could not send the password reset email. Please try again later');
+    error.status = 503;
+    throw error;
+  } finally {
+    transporter.close();
+  }
+};
+
+module.exports = {
+  assertEmailConfiguration,
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+};

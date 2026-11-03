@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { publicUser } = require('../services/auth.service');
+const { isValidTimezone } = require('../utils/timezone');
 const {
   uploadProfileImage,
   deleteProfileImage,
@@ -19,8 +20,17 @@ const getProfile = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const updates = {};
-    for (const field of ['firstName', 'lastName', 'phone']) {
-      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    for (const field of ['firstName', 'lastName', 'phone', 'timezone']) {
+      if (req.body[field] !== undefined) {
+        if (field === 'timezone') {
+          if (!isValidTimezone(req.body.timezone)) {
+            return res.status(400).json({ succeeded: false, message: 'Invalid IANA timezone string' });
+          }
+          updates.timezone = req.body.timezone.trim();
+        } else {
+          updates[field] = req.body[field];
+        }
+      }
     }
 
     const user = await User.findByIdAndUpdate(req.userId, { $set: updates }, {
@@ -82,4 +92,8 @@ const updateProfileImage = async (req, res) => {
   }
 };
 
-module.exports = { getProfile, updateProfile, updateProfileImage };
+module.exports = {
+  getProfile,
+  updateProfile,
+  updateProfileImage,
+};
