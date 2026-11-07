@@ -1,5 +1,5 @@
-const stripe  = require('../config/stripe');
-const Order   = require('../models/Order');
+const stripe = require('../config/stripe');
+const Order = require('../models/Order');
 const Payment = require('../models/Payment');
 const Product = require('../models/Product');
 
@@ -17,11 +17,11 @@ const createError = (message, status) => {
 const mapStripeStatus = (stripeStatus) => {
   const map = {
     requires_payment_method: 'requires_payment_method',
-    requires_confirmation:   'requires_confirmation',
-    requires_action:         'requires_action',
-    processing:              'processing',
-    succeeded:               'succeeded',
-    canceled:                'cancelled', // Stripe spells it 'canceled' (one 'l')
+    requires_confirmation: 'requires_confirmation',
+    requires_action: 'requires_action',
+    processing: 'processing',
+    succeeded: 'succeeded',
+    canceled: 'cancelled', // Stripe spells it 'canceled' (one 'l')
   };
   return map[stripeStatus] || stripeStatus;
 };
@@ -66,13 +66,13 @@ const createPaymentIntent = async (userId, orderId) => {
     }
     // Return the existing client_secret — Stripe client can re-confirm it
     return {
-      clientSecret:      existing.stripeClientSecret,
-      paymentIntentId:   existing.stripePaymentIntentId,
-      amountInCents:     existing.amountInCents,
-      amount:            existing.amountInCents / 100,
-      currency:          existing.currency,
-      status:            existing.status,
-      isExisting:        true,
+      clientSecret: existing.stripeClientSecret,
+      paymentIntentId: existing.stripePaymentIntentId,
+      amountInCents: existing.amountInCents,
+      amount: existing.amountInCents / 100,
+      currency: existing.currency,
+      status: existing.status,
+      isExisting: true,
     };
   }
 
@@ -80,12 +80,12 @@ const createPaymentIntent = async (userId, orderId) => {
 
   // Create the PaymentIntent on Stripe
   const intent = await stripe.paymentIntents.create({
-    amount:   order.totalInCents,
+    amount: order.totalInCents,
     currency,
     metadata: {
-      orderId:     String(order._id),
+      orderId: String(order._id),
       orderNumber: order.orderNumber,
-      userId:      String(userId),
+      userId: String(userId),
     },
     // Automatically confirm with payment_method from frontend
     automatic_payment_methods: { enabled: true },
@@ -93,27 +93,27 @@ const createPaymentIntent = async (userId, orderId) => {
 
   // Persist to our database
   const payment = await Payment.create({
-    order:                  order._id,
-    user:                   userId,
-    stripePaymentIntentId:  intent.id,
-    stripeClientSecret:     intent.client_secret,
-    amountInCents:          order.totalInCents,
+    order: order._id,
+    user: userId,
+    stripePaymentIntentId: intent.id,
+    stripeClientSecret: intent.client_secret,
+    amountInCents: order.totalInCents,
     currency,
-    status:                 mapStripeStatus(intent.status),
+    status: mapStripeStatus(intent.status),
     stripeMetadata: {
-      orderId:     String(order._id),
+      orderId: String(order._id),
       orderNumber: order.orderNumber,
     },
   });
 
   return {
-    clientSecret:    payment.stripeClientSecret,
+    clientSecret: payment.stripeClientSecret,
     paymentIntentId: intent.id,
-    amountInCents:   payment.amountInCents,
-    amount:          payment.amountInCents / 100,
-    currency:        payment.currency,
-    status:          payment.status,
-    isExisting:      false,
+    amountInCents: payment.amountInCents,
+    amount: payment.amountInCents / 100,
+    currency: payment.currency,
+    status: payment.status,
+    isExisting: false,
   };
 };
 
@@ -220,20 +220,20 @@ const handleWebhook = async (rawBody, signature) => {
     }
 
     // Extract card details from the latest charge
-    const charge     = object.latest_charge;
-    let cardLast4    = '';
-    let cardBrand    = '';
+    const charge = object.latest_charge;
+    let cardLast4 = '';
+    let cardBrand = '';
     let paymentMethod = object.payment_method_types?.[0] || 'card';
 
     if (charge && typeof charge === 'object') {
-      cardLast4    = charge.payment_method_details?.card?.last4 || '';
-      cardBrand    = charge.payment_method_details?.card?.brand || '';
+      cardLast4 = charge.payment_method_details?.card?.last4 || '';
+      cardBrand = charge.payment_method_details?.card?.brand || '';
     }
 
     await Payment.findByIdAndUpdate(payment._id, {
       $set: {
-        status:           'succeeded',
-        paidAt:           new Date(),
+        status: 'succeeded',
+        paidAt: new Date(),
         lastWebhookEvent: type,
         cardLast4,
         cardBrand,
@@ -285,16 +285,16 @@ const handleWebhook = async (rawBody, signature) => {
 
     const refund = object.refunds?.data?.[0];
     const refundedAmount = object.amount_refunded || 0;
-    const isFullRefund   = refundedAmount >= object.amount;
+    const isFullRefund = refundedAmount >= object.amount;
 
     await Payment.findOneAndUpdate(
       { stripePaymentIntentId: intentId },
       {
         $set: {
-          status:                isFullRefund ? 'refunded' : 'partially_refunded',
+          status: isFullRefund ? 'refunded' : 'partially_refunded',
           refundedAmountInCents: refundedAmount,
-          refundedAt:            new Date(),
-          lastWebhookEvent:      type,
+          refundedAt: new Date(),
+          lastWebhookEvent: type,
           ...(refund ? { refundId: refund.id } : {}),
         },
       }
@@ -334,21 +334,21 @@ const refundPayment = async (orderId, reason = '') => {
 
   const refund = await stripe.refunds.create({
     payment_intent: payment.stripePaymentIntentId,
-    reason:         'requested_by_customer',
+    reason: 'requested_by_customer',
     metadata: {
-      orderId:        String(orderId),
+      orderId: String(orderId),
       cancellationReason: reason,
     },
   });
 
   await Payment.findByIdAndUpdate(payment._id, {
     $set: {
-      status:                'refunded',
-      refundId:              refund.id,
+      status: 'refunded',
+      refundId: refund.id,
       refundedAmountInCents: refund.amount,
-      refundedAt:            new Date(),
-      refundReason:          reason,
-      lastWebhookEvent:      'manual_refund',
+      refundedAt: new Date(),
+      refundReason: reason,
+      lastWebhookEvent: 'manual_refund',
     },
   });
 
