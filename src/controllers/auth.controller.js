@@ -37,7 +37,7 @@ const signupUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const data = await login(req.body);
-    return res.json({ succeeded: true, message: 'Login successful', data });
+    return res.status(200).json({ succeeded: true, message: 'Login successful', data });
   } catch (error) {
     return sendError(res, error);
   }

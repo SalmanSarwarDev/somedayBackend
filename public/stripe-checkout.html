@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stripe Payment Intents Test Playground</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 30px 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 28px;
+      max-width: 540px;
+      width: 100%;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+    h2 { margin-top: 0; color: #60a5fa; }
+    label { font-size: 13px; font-weight: 600; color: #94a3b8; display: block; margin-top: 14px; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 14px;
+    }
+    input:focus { outline: none; border-color: #3b82f6; }
+    #card-element {
+      background: #0f172a;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      margin-top: 6px;
+    }
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      background: #3b82f6;
+      color: white;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #2563eb; }
+    button:disabled { background: #475569; cursor: not-allowed; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: #334155;
+      color: #38bdf8;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .result {
+      margin-top: 18px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      display: none;
+    }
+    .success { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; }
+    .error { background: #7f1d1d; color: #fecaca; border: 1px solid #dc2626; }
+    .info { background: #1e3a8a; color: #bfdbfe; border: 1px solid #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>💳 Stripe Payment Intents Tester</h2>
+    <p style="color:#94a3b8; font-size:14px; margin-top:-6px;">Test your orders with Stripe test cards</p>
+
+    <label>1. Stripe Publishable Key (pk_test_...)</label>
+    <input id="publishableKey" placeholder="pk_test_..." />
+
+    <label>2. User JWT Bearer Token (from /api/auth/login)</label>
+    <input id="jwtToken" placeholder="eyJhbGciOi..." />
+
+    <label>3. Order ID (from /api/orders)</label>
+    <input id="orderId" placeholder="6730..." />
+
+    <button id="btnInit" onclick="initPayment()">Fetch PaymentIntent & Load Card Form</button>
+
+    <div id="payment-section" style="display:none; margin-top: 20px;">
+      <div id="order-details" class="result info" style="display:block;"></div>
+
+      <label>Card Information (Use test card: <span class="badge">4242 4242 4242 4242</span>)</label>
+      <div id="card-element"></div>
+      <div id="card-errors" style="color:#ef4444; font-size:12px; margin-top:6px;"></div>
+
+      <button id="btnPay" onclick="submitPayment()">Pay Now</button>
+    </div>
+
+    <div id="statusBox" class="result"></div>
+  </div>
+
+  <script>
+    let stripe, elements, cardElement, clientSecret;
+
+    async function initPayment() {
+      const pubKey = document.getElementById('publishableKey').value.trim();
+      const token = document.getElementById('jwtToken').value.trim();
+      const orderId = document.getElementById('orderId').value.trim();
+      const statusBox = document.getElementById('statusBox');
+
+      if (!pubKey || !token || !orderId) {
+        alert('Please fill in Publishable Key, JWT Token, and Order ID.');
+        return;
+      }
+
+      statusBox.style.display = 'block';
+      statusBox.className = 'result info';
+      statusBox.textContent = 'Calling /api/payments/orders/' + orderId + '/intent...';
+
+      try {
+        const res = await fetch(`/api/payments/orders/${orderId}/intent`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.succeeded) {
+          statusBox.className = 'result error';
+          statusBox.textContent = 'Error: ' + (data.message || 'Failed to create PaymentIntent');
+          return;
+        }
+
+        const payment = data.data.payment;
+        clientSecret = payment.clientSecret;
+
+        document.getElementById('order-details').innerHTML =
+          `<strong>Order Total:</strong> $${payment.amount} (${payment.currency.toUpperCase()})<br>` +
+          `<strong>Payment Intent ID:</strong> ${payment.paymentIntentId}<br>` +
+          `<strong>Status:</strong> ${payment.status}`;
+
+        // Initialize Stripe.js
+        stripe = Stripe(pubKey);
+        elements = stripe.elements();
+        cardElement = elements.create('card', {
+          style: {
+            base: {
+              color: '#f8fafc',
+              fontSize: '15px',
+              '::placeholder': { color: '#64748b' }
+            },
+            invalid: { color: '#ef4444' }
+          }
+        });
+
+        document.getElementById('card-element').innerHTML = '';
+        cardElement.mount('#card-element');
+
+        cardElement.on('change', (e) => {
+          document.getElementById('card-errors').textContent = e.error ? e.error.message : '';
+        });
+
+        document.getElementById('payment-section').style.display = 'block';
+        document.getElementById('btnInit').style.display = 'none';
+        statusBox.style.display = 'none';
+      } catch (err) {
+        statusBox.className = 'result error';
+        statusBox.textContent = 'Network error: ' + err.message;
+      }
+    }
+
+    async function submitPayment() {
+      const btn = document.getElementById('btnPay');
+      const statusBox = document.getElementById('statusBox');
+      btn.disabled = true;
+      btn.textContent = 'Processing Payment...';
+      statusBox.style.display = 'block';
+      statusBox.className = 'result info';
+      statusBox.textContent = 'Confirming card payment with Stripe...';
+
+      const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: { card: cardElement }
+      });
+
+      if (error) {
+        btn.disabled = false;
+        btn.textContent = 'Pay Now';
+        statusBox.className = 'result error';
+        statusBox.textContent = 'Payment Failed: ' + error.message;
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        btn.disabled = true;
+        btn.textContent = 'Payment Succeeded ✅';
+        statusBox.className = 'result success';
+        statusBox.textContent = 'Payment Successful! 🎉 Syncing order status with server...';
+
+        // Auto-sync order status with server
+        try {
+          const syncRes = await fetch(`/api/payments/orders/${orderId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': 'Bearer ' + document.getElementById('jwtToken').value.trim()
+            }
+          });
+          const syncData = await syncRes.json();
+          if (syncData.succeeded) {
+            statusBox.textContent =
+              '🎉 Payment Successful & Order Confirmed! ✅\n\n' +
+              'Order Status: CONFIRMED\n' +
+              'Payment Status: ' + syncData.data.payment.status.toUpperCase() + '\n' +
+              'Card: ' + (syncData.data.payment.cardBrand || 'Card').toUpperCase() + ' ending in ' + (syncData.data.payment.cardLast4 || '4242') + '\n' +
+              'Transaction ID: ' + syncData.data.payment.stripePaymentIntentId;
+          }
+        } catch (_e) {
+          statusBox.textContent = 'Payment Succeeded! 🎉 (' + paymentIntent.id + ')';
+        }
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Pay Now';
+        statusBox.className = 'result info';
+        statusBox.textContent = 'Payment status: ' + (paymentIntent ? paymentIntent.status : 'unknown');
+      }
+    }
+  </script>
+</body>
+</html>
+
